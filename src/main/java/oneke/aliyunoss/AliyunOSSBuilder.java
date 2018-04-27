@@ -1,29 +1,29 @@
 package oneke.aliyunoss;
 
+import com.aliyun.oss.OSSClient;
+import com.aliyun.oss.model.OSSObjectSummary;
+import com.aliyun.oss.model.ObjectListing;
 import com.aliyun.oss.model.ObjectMetadata;
-import hudson.Launcher;
 import hudson.Extension;
 import hudson.FilePath;
-import hudson.util.FormValidation;
+import hudson.Launcher;
 import hudson.model.AbstractProject;
 import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
-import hudson.tasks.Builder;
 import hudson.tasks.BuildStepDescriptor;
+import hudson.tasks.Builder;
+import hudson.util.FormValidation;
 import jenkins.tasks.SimpleBuildStep;
 import net.sf.json.JSONObject;
-
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.StaplerRequest;
-
 import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-
-import com.aliyun.oss.OSSClient;
 
 /**
  * @author leixu2txtek
@@ -83,8 +83,8 @@ public class AliyunOSSBuilder extends Builder implements SimpleBuildStep {
 
         //region gets all upload path
 
-        ArrayList<String> paths = new ArrayList<String>();
-        ArrayList<String> filePaths = new ArrayList<String>();
+        ArrayList<String> paths = new ArrayList<>();
+        ArrayList<String> filePaths = new ArrayList<>();
 
         for (String p : this.FilePaths.split(";")) {
 
@@ -104,7 +104,7 @@ public class AliyunOSSBuilder extends Builder implements SimpleBuildStep {
 
         //region gets all files
 
-        ArrayList<String> files = new ArrayList<String>();
+        ArrayList<String> files = new ArrayList<>();
         for (String path : paths) Utils.GetFilesWithChildren(new File(path), files);
 
         //endregion
@@ -134,8 +134,7 @@ public class AliyunOSSBuilder extends Builder implements SimpleBuildStep {
         String prefix = String.format("public/%s/", jobName);
 
         try {
-
-            client.deleteObject(this.getBucketName(), prefix);
+            deleteOssDirectory(prefix, client);
         } catch (Exception ex) {
 
             build.setResult(Result.FAILURE);
@@ -170,6 +169,8 @@ public class AliyunOSSBuilder extends Builder implements SimpleBuildStep {
 
             if (file.indexOf(File.separator) != -1) file = file.substring(1);
 
+            file = file.replace("\\", "/");
+
             //upload objects in public directory
             file = String.format("%s%s", prefix, file);
 
@@ -182,6 +183,18 @@ public class AliyunOSSBuilder extends Builder implements SimpleBuildStep {
         }
 
         logger.println(String.format("成功上传 %s 个静态资源", files.size()));
+    }
+
+    private void deleteOssDirectory(String dir, OSSClient ossClient) {
+        ObjectListing listing = ossClient.listObjects(getBucketName(), dir);
+        List<OSSObjectSummary> sums = listing.getObjectSummaries();
+
+        for (OSSObjectSummary s : sums) {
+            ossClient.deleteObject(s.getBucketName(), s.getKey());
+        }
+        if (sums.size() > 0) {
+            deleteOssDirectory(dir, ossClient);
+        }
     }
 
     @Override
